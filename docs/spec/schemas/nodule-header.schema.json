@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NoduleHeader",
+  "description": "The JSON projection of a parsed structured nodule header (DN-06 §6; the Nodule-Header-and-Project-Manifest spec §3, Accepted 2026-06-16). The required in-file marker is `// nodule: <dotted.name>` (or bare `// nodule`); optional `// @key: value` lines carry the closed v0 key set. Metadata is NOT identity — it never perturbs a definition's content hash (ADR-003). The closed key set is enforced by `additionalProperties: false`.",
+  "x-mycelium": {
+    "status": "accepted",
+    "task": "M-359",
+    "source": "docs/spec/Nodule-Header-and-Project-Manifest.md §3, §7.2-§7.3",
+    "ratified_on": "2026-06-16",
+    "$comment": "JSON Schema fixes the closed key set, the value shapes, and the types. Two honesty-load-bearing checks live in code (mycelium-proj::header), not the regex: (1) `license` must be a recognised SPDX id/expression (membership in KNOWN_SPDX — a pattern only checks the token shape); (2) `since`/`updated` must be a real calendar date (month 1-12, day 1-31 — the date regex only checks YYYY-MM-DD shape). Both are explicit errors at parse time (G2). Duplicate `@key` lines are likewise a parse-time error (a JSON object cannot express duplicate keys)."
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+      "description": "The nodule's dotted logical name (from the marker). Absent for a bare `// nodule` marker."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+].*)?$",
+      "description": "Semver release label; inherits from project.version."
+    },
+    "license": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.+-]+( (OR|AND|WITH) [A-Za-z0-9.+-]+)*$",
+      "description": "SPDX identifier or expression; inherits from project.license. SPDX *membership* is checked in code (see x-mycelium.$comment)."
+    },
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Comma-separated in the header; inherits from project.authors."
+    },
+    "since": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "First publication (ISO-8601 date); inherits from project.since. Calendar-range checked in code."
+    },
+    "updated": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Last update (ISO-8601 date); per-file, author-maintained (§7.4); never inherited."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line description; per-file."
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^(https?|ssh|git)://|^git@",
+      "description": "Source URL; inherits from project.repository."
+    },
+    "keywords": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Discovery tags; inherits from project.keywords."
+    },
+    "deprecated": {
+      "type": ["boolean", "string"],
+      "description": "A flag or a reason string flagging this nodule superseded; per-file, never inherited."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "kind": "Bounded",
+  "src": { "kind": "Dense", "dim": 768, "dtype": "F32" },
+  "target": { "kind": "Dense", "dim": 768, "dtype": "BF16" },
+  "bound": { "kind": "ErrorBound", "eps": 0.0078, "norm": "Rel", "basis": { "kind": "UserDeclared" } }
+}

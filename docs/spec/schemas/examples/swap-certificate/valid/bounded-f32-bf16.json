@@ -1,0 +1,7 @@
+{
+  "kind": "Bounded",
+  "src": { "kind": "Dense", "dim": 768, "dtype": "F32" },
+  "target": { "kind": "Dense", "dim": 768, "dtype": "BF16" },
+  "policy_used": "blake3:po1icy_Ref00",
+  "bound": { "kind": "ErrorBound", "eps": 0.0078, "norm": "Rel", "basis": { "kind": "ProvenThm", "citation": "IEEE-754 round-to-nearest rounding-error theory (ADR-010 ErrorBound)" } }
+}

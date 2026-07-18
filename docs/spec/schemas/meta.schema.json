@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Meta",
+  "description": "Runtime, queryable metadata that travels with every value and survives lowering (RFC-0001 §4.3). Self-describing (Arrow-grade); the data the LSP surfaces to humans and AI (Foundation §5.8). The schema invariants M-I1..M-I4 (guarantee<->bound consistency) are encoded below as conditionals; M-I5 (lossless physical) is a cross-field/code invariant (see physical-layout.schema.json).",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §4.3",
+    "ratified_against": "RFC-0001 (Accepted, r1) §4.3 Metadata schema + invariants M-I1..M-I5",
+    "ratified_on": "2026-06-09",
+    "$comment": "bound is modelled by PRESENCE (absent for Exact) rather than null, so M-I1's 'bound == None' maps to property-absence."
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provenance", "guarantee"],
+  "properties": {
+    "provenance": { "$ref": "provenance.schema.json" },
+    "guarantee": { "$ref": "guarantee.schema.json" },
+    "bound": { "$ref": "bound.schema.json" },
+    "sparsity": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "MEASURED sparsity (dynamic). Distinct from the declared SparsityClass in Repr.",
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "density": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["active", "density"]
+    },
+    "physical": {
+      "oneOf": [
+        { "$ref": "physical-layout.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "reconstruction": {
+      "oneOf": [
+        { "$ref": "reconstruction-manifest.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "policy_used": {
+      "oneOf": [
+        { "$ref": "policy.schema.json#/$defs/PolicyRef" },
+        { "type": "null" }
+      ],
+      "description": "Set iff produced by a Swap (ADR-006)."
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "M-I1 (forward): guarantee == Exact  =>  bound absent.",
+      "if": { "required": ["guarantee"], "properties": { "guarantee": { "const": "Exact" } } },
+      "then": { "not": { "required": ["bound"] } }
+    },
+    {
+      "$comment": "M-I1 (reverse): guarantee != Exact  =>  bound present.",
+      "if": { "required": ["guarantee"], "properties": { "guarantee": { "not": { "const": "Exact" } } } },
+      "then": { "required": ["bound"] }
+    },
+    {
+      "$comment": "M-I2: Proven => bound.basis.kind == ProvenThm.",
+      "if": { "required": ["guarantee"], "properties": { "guarantee": { "const": "Proven" } } },
+      "then": { "properties": { "bound": { "properties": { "basis": { "properties": { "kind": { "const": "ProvenThm" } } } } } } }
+    },
+    {
+      "$comment": "M-I3: Empirical => bound.basis.kind == EmpiricalFit.",
+      "if": { "required": ["guarantee"], "properties": { "guarantee": { "const": "Empirical" } } },
+      "then": { "properties": { "bound": { "properties": { "basis": { "properties": { "kind": { "const": "EmpiricalFit" } } } } } } }
+    },
+    {
+      "$comment": "M-I4: Declared => bound.basis.kind == UserDeclared.",
+      "if": { "required": ["guarantee"], "properties": { "guarantee": { "const": "Declared" } } },
+      "then": { "properties": { "bound": { "properties": { "basis": { "properties": { "kind": { "const": "UserDeclared" } } } } } } }
+    }
+  ]
+}

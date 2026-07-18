@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SelectionPolicy / PolicyRef",
+  "description": "A reified, content-addressed, total, non-learned, cost-based selection policy and the lightweight PolicyRef that records its use (RFC-0005). One mechanism serves two sites: swap-target selection (RFC-0002) and packing-schedule selection (RFC-0004). The policy is a total decision-table predicate from inspectable Meta to a finite candidate set with an explicit cost function; it is NOT Turing-complete (the expressiveness ceiling is the feature, ADR-006). Every automatic selection emits a mandatory EXPLAIN record.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0005 §2-§4",
+    "ratified_against": "RFC-0005 (Accepted) §2 decision, §3 reification",
+    "ratified_on": "2026-06-09",
+    "$comment": "RFC-0005 fixes the policy's required PROPERTIES (total, finite candidate set, deterministic, explicit cost, mandatory EXPLAIN, override hook) but defers the concrete predicate grammar to a later RFC (OQ-5). This schema fixes the contract surface and the EXPLAIN-trace shape; the predicate body is left as an opaque-but-declared `rule` object pending that RFC. Determinism (same Meta in -> same choice out) is a behavioural contract, not single-instance checkable."
+  },
+  "$defs": {
+    "ContentHash": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+:[A-Za-z0-9_-]+$",
+      "description": "Content-address '<algo>:<digest>' (RFC-0001 §4.6)."
+    },
+    "PolicyRef": {
+      "$ref": "#/$defs/ContentHash",
+      "description": "The content hash of a SelectionPolicy, recorded in Meta.policy_used whenever a Swap or packing decision uses it (RFC-0005 §3)."
+    },
+    "ExplainTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The mandatory EXPLAIN record emitted by every automatic selection (RFC-0005 §2.2).",
+      "properties": {
+        "inputs_considered": {
+          "type": "object",
+          "description": "The inspectable Meta fields the policy read (bounds, dtype, sparsity class)."
+        },
+        "candidate_costs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "candidate": { "type": "string", "minLength": 1 },
+              "cost": { "type": "number" }
+            },
+            "required": ["candidate", "cost"]
+          }
+        },
+        "chosen": { "type": "string", "minLength": 1 },
+        "override": {
+          "type": ["string", "null"],
+          "description": "A deterministic user override/hint, if one forced the choice."
+        }
+      },
+      "required": ["inputs_considered", "candidate_costs", "chosen"]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "candidates", "cost_function", "rules", "explainable"],
+  "properties": {
+    "id": { "$ref": "#/$defs/ContentHash" },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The FINITE candidate set the policy chooses among (RFC-0005 §2.1)."
+    },
+    "cost_function": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An identifier/spec of the explicit cost function. Mycelium's statistics are exact metadata, not sampled estimates, so the cardinality-estimation opacity of DB optimizers does not arise (RFC-0005 §2.5)."
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The total decision table: each rule maps an inspectable-input predicate to a candidate. Concrete predicate grammar deferred (OQ-5); kept as a declared object here.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "when": { "type": "object", "description": "Predicate over queryable Meta (grammar in a later RFC)." },
+          "choose": { "type": "string", "minLength": 1 }
+        },
+        "required": ["when", "choose"]
+      }
+    },
+    "explainable": {
+      "const": true,
+      "description": "EXPLAIN is mandatory; a policy that cannot explain is the black box ADR-006 forbids."
+    },
+    "explain_trace_shape": {
+      "$ref": "#/$defs/ExplainTrace",
+      "description": "Optional embedded example/shape of the EXPLAIN record this policy emits."
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repr",
+  "description": "Representation descriptor (the paradigm-in-the-type). Faithful JSON projection of RFC-0001 §4.1. The four paradigm KINDS are closed in the kernel (a fifth requires an RFC+ADR); the parameter registries (dtype, model, pack scheme) are open. Two values share a type only if kind and semantic parameters match; Binary{8} and Ternary{6} are unrelated types.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §4.1",
+    "ratified_against": "RFC-0001 (Accepted, r1) §4.1 Representation descriptors",
+    "ratified_on": "2026-06-09"
+  },
+  "$defs": {
+    "Nat": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "A positive width/dimension. Zero-width reprs are not well-formed."
+    },
+    "ScalarKind": {
+      "type": "string",
+      "enum": ["F16", "BF16", "F32", "F64"],
+      "description": "RFC-0001 §4.1: an EXTENSIBLE registry. Enumerated here as the initial set; adding a member is a registry change, not an RFC. dtype stays in the Dense type because precision is semantically significant (it bounds embedding error)."
+    },
+    "SparsityClass": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "class": { "const": "Dense" } },
+          "required": ["class"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "class": { "const": "Sparse" },
+            "max_active": { "$ref": "#/$defs/Nat" }
+          },
+          "required": ["class", "max_active"]
+        }
+      ],
+      "description": "RFC-0001 §4.1 / RFC-0003 §5. The DECLARED sparsity class is a static refinement {v | activeCount v <= max_active}. Observed sparsity is runtime Meta.sparsity, not here."
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Binary" },
+        "width": { "$ref": "#/$defs/Nat" }
+      },
+      "required": ["kind", "width"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Ternary" },
+        "trits": { "$ref": "#/$defs/Nat" }
+      },
+      "required": ["kind", "trits"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Dense" },
+        "dim": { "$ref": "#/$defs/Nat" },
+        "dtype": { "$ref": "#/$defs/ScalarKind" }
+      },
+      "required": ["kind", "dim", "dtype"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "VSA" },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ModelId resolved against the VSA model registry, populated by the VSA submodule (ADR-008), not the kernel. E.g. MAP-I, MAP-B, BSC, HRR, FHRR, Sparse."
+        },
+        "dim": { "$ref": "#/$defs/Nat" },
+        "sparsity": { "$ref": "#/$defs/SparsityClass" }
+      },
+      "required": ["kind", "model", "dim", "sparsity"]
+    }
+  ]
+}

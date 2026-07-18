@@ -1,0 +1,6 @@
+{
+  "kind": "Bijective",
+  "src": { "kind": "Binary", "width": 8 },
+  "target": { "kind": "Ternary", "trits": 6 },
+  "policy_used": "blake3:po1icy_Ref00"
+}

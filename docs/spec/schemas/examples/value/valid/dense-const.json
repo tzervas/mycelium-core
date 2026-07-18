@@ -1,0 +1,5 @@
+{
+  "repr": { "kind": "Dense", "dim": 3, "dtype": "F32" },
+  "payload": { "scalars": [0.5, -1.25, 2.0] },
+  "meta": { "provenance": { "kind": "Root" }, "guarantee": "Exact" }
+}

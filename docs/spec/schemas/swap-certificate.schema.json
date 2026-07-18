@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SwapCertificate",
+  "description": "The inspectable certificate every Swap produces (RFC-0002 §3, §5). A swap is NEVER silent (SC-3): it yields a value in the target paradigm AND a certificate describing what the conversion cost. Two forms: a Bijective certificate (references a once-per-swap-kind bijection lemma + concrete params, cacheable by content hash; no per-value proofs) and a Bounded certificate (carries a Bound + BoundBasis + the PolicyRef used). The same certificate format and checker also serve interpreter-vs-compiled equivalence (RFC-0004 §3).",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0002 §3, §4, §5",
+    "ratified_against": "RFC-0002 (Accepted) §3 certificate content + §5 legal-pair table",
+    "ratified_on": "2026-06-09",
+    "$comment": "Legality of the specific (src -> target) pair is enforced against RFC-0002 §5's legal-pair table by the swap checker (Phase-1/2 M-120, M-150), not by this schema. A pair with no statable bound is a type error, never a Declared gamble (RFC-0002 §5)."
+  },
+  "$defs": {
+    "ContentHash": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+:[A-Za-z0-9_-]+$"
+    }
+  },
+  "type": "object",
+  "required": ["kind", "src", "target", "policy_used"],
+  "properties": {
+    "src": { "$ref": "repr.schema.json" },
+    "target": { "$ref": "repr.schema.json" },
+    "policy_used": { "$ref": "policy.schema.json#/$defs/PolicyRef" }
+  },
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Bijective" },
+        "src": true,
+        "target": true,
+        "policy_used": true,
+        "lemma_ref": {
+          "$ref": "#/$defs/ContentHash",
+          "description": "Content hash of the once-per-swap-kind bijectivity lemma (e.g. the binary<->ternary LosslessWithinRange round-trip proof). Each use references it; no per-value proof."
+        },
+        "params": {
+          "type": "object",
+          "description": "Concrete parameters binding the lemma to this use (e.g. {width, trits}). Lets the certificate be cached by content hash. REQUIRED (A6-09): the Rust `SwapCertificate::Bijective` always carries typed binding params, so a schema-valid cert without `params` would be rejected by the kernel — the schema now matches that stronger contract."
+        }
+      },
+      "required": ["kind", "src", "target", "policy_used", "lemma_ref", "params"],
+      "description": "Exact-within-range; discharges by SMT/symbolic equality. Out-of-range inputs are an explicit Option/error, never silent (RFC-0002 §4)."
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Bounded" },
+        "src": true,
+        "target": true,
+        "policy_used": true,
+        "bound": {
+          "$ref": "bound.schema.json",
+          "description": "ε and/or δ with BoundBasis. The strength tag is DERIVED from how the bound was obtained, never asserted: Proven only if it cites a theorem whose side-conditions are checked (RFC-0002 §3)."
+        }
+      },
+      "required": ["kind", "src", "target", "policy_used", "bound"],
+      "description": "Lossy/bounded swap; approximate cases discharge via the ADR-010 bound kernels."
+    }
+  ]
+}

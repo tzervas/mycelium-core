@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReconstructionManifest",
+  "description": "The Manifest-style reconstruction info for lossy/holographic (VSA) forms, referenced from Meta.reconstruction (RFC-0001 §4.3 ReconInfo; specified in RFC-0003 §6). Explicitly distinguishes INDEXED RETRIEVAL (codebook + similarity + threshold; returns a stored atom; bounded-lossy; NOT holographic) from TRUE COMPOSITIONAL RECONSTRUCTION (requires the structural recipe/role schema + algebraic inverse ops; can recover novel combinations never stored) — VSA's defining capability over a hash table.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0003 §6",
+    "ratified_against": "RFC-0003 (Accepted r4) §6/§6.1 Reconstruction manifest",
+    "ratified_on": "2026-06-09",
+    "revised_on": "2026-06-15",
+    "$comment": "Factorization (resonator networks) is Phase-3 exploratory and probabilistic-only (FR-C2); when present, `decode` carries the factor structure + iteration budget and `bound.strength` MUST NOT exceed Empirical. r4 (per RFC-0009): `decode` gains optional, additive resonator params (cleanup/beta/tau_lock/init/seed) and the Resonator procedure now REQUIRES factors + iteration_budget (matching the Rust ReconInfo::new contract). Metadata-only; no guarantee change."
+  },
+  "$defs": {
+    "ContentHash": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+:[A-Za-z0-9_-]+$"
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "model", "dim", "codebooks", "decode", "bound"],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["IndexedRetrieval", "CompositionalReconstruction"],
+      "description": "Which capability this manifest supports (RFC-0003 §6). CompositionalReconstruction MUST supply a `recipe`."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "VSA ModelId (matches the producing Repr.model)."
+    },
+    "dim": { "type": "integer", "minimum": 1 },
+    "codebooks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ContentHash" },
+      "description": "Atomic item-memory codebook(s) as CONTENT-ADDRESSED references (Unison identity fits)."
+    },
+    "recipe": {
+      "type": ["object", "null"],
+      "description": "The compositional recipe / role schema: which ops combined which slots. REQUIRED (non-null) for CompositionalReconstruction; absent/null for IndexedRetrieval. A6-06: both `roles` and `structure` are REQUIRED, and `structure` maps each role name to the CONTENT-ADDRESSED hash of its role atom — matching the Rust `Recipe { roles, structure: Map<String, ContentHash> }` contract, so a schema-valid recipe is also kernel-valid.",
+      "additionalProperties": false,
+      "required": ["roles", "structure"],
+      "properties": {
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "structure": {
+          "type": "object",
+          "description": "Role name → content hash of the role atom (an inspectable, content-addressed object).",
+          "additionalProperties": { "$ref": "#/$defs/ContentHash" }
+        }
+      }
+    },
+    "decode": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Decoding procedure + params: a cleanup threshold (indexed) or a resonator factor structure + iteration budget (compositional). r4: optional resonator params (cleanup/beta/tau_lock/init/seed) per RFC-0009 §4 — additive, metadata-only.",
+      "properties": {
+        "procedure": { "type": "string", "enum": ["Cleanup", "Resonator"] },
+        "cleanup_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "factors": { "type": "array", "items": { "$ref": "#/$defs/ContentHash" } },
+        "iteration_budget": { "type": "integer", "minimum": 1 },
+        "cleanup": { "type": "string", "enum": ["Softmax", "ArgMax"], "description": "Resonator per-slot cleanup projection (RFC-0009 §3/§9 Q2). Default Softmax." },
+        "beta": { "type": "number", "exclusiveMinimum": 0, "description": "Softmax inverse-temperature β > 0 (RFC-0009 §9 Q2); meaningful when cleanup == Softmax." },
+        "tau_lock": { "type": "number", "minimum": 0, "maximum": 1, "description": "Per-slot top-similarity lock threshold for the convergence verdict (RFC-0009 §3)." },
+        "init": { "type": "string", "enum": ["UniformSuperposition", "SeededGuess"], "description": "Resonator initialisation strategy (RFC-0009 §9 Q1). Default UniformSuperposition." },
+        "seed": { "type": "integer", "minimum": 0, "description": "Initialisation seed for reproducibility (RFC-0009 §6)." }
+      },
+      "required": ["procedure"]
+    },
+    "bound": {
+      "$ref": "bound.schema.json",
+      "description": "The {ε, δ, strength} bound certificate for the reconstruction."
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "CompositionalReconstruction requires a non-null recipe.",
+      "if": { "properties": { "mode": { "const": "CompositionalReconstruction" } }, "required": ["mode"] },
+      "then": { "properties": { "recipe": { "type": "object" } }, "required": ["recipe"] }
+    },
+    {
+      "$comment": "A6-06: the Cleanup decode procedure REQUIRES `cleanup_threshold` — matching the Rust contract (ReconInfo::new rejects a Cleanup spec with no threshold). `cleanup_threshold`'s [0,1] range is enforced unconditionally by the `decode.cleanup_threshold` property, so a stray threshold on any procedure (e.g. Resonator) is range-checked too.",
+      "if": {
+        "properties": { "decode": { "properties": { "procedure": { "const": "Cleanup" } }, "required": ["procedure"] } },
+        "required": ["decode"]
+      },
+      "then": {
+        "properties": { "decode": { "required": ["procedure", "cleanup_threshold"] } }
+      }
+    },
+    {
+      "$comment": "r4 (RFC-0009): the Resonator decode procedure REQUIRES `factors` + `iteration_budget` — matching the Rust contract (ReconInfo::new rejects a Resonator spec lacking either). The resonator params (cleanup/beta/tau_lock/init/seed) stay optional and are range-checked unconditionally by their `decode` property definitions.",
+      "if": {
+        "properties": { "decode": { "properties": { "procedure": { "const": "Resonator" } }, "required": ["procedure"] } },
+        "required": ["decode"]
+      },
+      "then": {
+        "properties": { "decode": { "required": ["procedure", "factors", "iteration_budget"] } }
+      }
+    }
+  ]
+}

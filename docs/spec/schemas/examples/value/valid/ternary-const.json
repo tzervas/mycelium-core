@@ -1,0 +1,5 @@
+{
+  "repr": { "kind": "Ternary", "trits": 6 },
+  "payload": { "trits": "0-00+0" },
+  "meta": { "provenance": { "kind": "Root" }, "guarantee": "Exact" }
+}

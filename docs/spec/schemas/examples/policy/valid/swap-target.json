@@ -1,0 +1,7 @@
+{
+  "id": "blake3:po1icy_Ref00",
+  "candidates": ["Ternary{6}", "Binary{8}"],
+  "cost_function": "min_lossless_bits",
+  "rules": [ { "when": { "src_kind": "Binary", "in_range": true }, "choose": "Ternary{6}" } ],
+  "explainable": true
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provenance",
+  "description": "Where a value came from: an acyclic derivation DAG (RFC-0001 §4.6). Provenance is dynamic metadata and is NOT part of code identity (it is not hashed). Provenance references ARE content hashes of the producing definitions.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §4.6",
+    "ratified_against": "RFC-0001 (Accepted, r1) §4.6 Content-addressing",
+    "ratified_on": "2026-06-09",
+    "$comment": "Acyclicity of the DAG is a structural invariant over linked provenance records, not checkable within a single JSON instance; enforced by the Phase-1 builder (M-103)."
+  },
+  "$defs": {
+    "ContentHash": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+:[A-Za-z0-9_-]+$",
+      "description": "A content-address: '<algo>:<digest>' (e.g. 'blake3:Hh3...'). The concrete hash algorithm/encoding is fixed in Phase 1 (M-103); the pattern fixes only the shape."
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "kind": { "const": "Root" } },
+      "required": ["kind"],
+      "description": "A primitive/constant origin with no inputs."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "Derived" },
+        "op": { "$ref": "#/$defs/ContentHash" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ContentHash" },
+          "description": "Content hashes of the input provenance/definitions."
+        }
+      },
+      "required": ["kind", "op", "inputs"],
+      "description": "Derived{ op: ContentHash, inputs: [ProvenanceRef] } (RFC-0001 §4.6)."
+    }
+  ]
+}
