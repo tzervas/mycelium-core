@@ -449,3 +449,61 @@ fn deserialize_resolves_mode_to_fast_never_silently_stronger() {
     let back: Meta = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(back.cert_mode(), crate::CertMode::Fast);
 }
+
+// ── cert handle (DN-142 §4.2; P1-Q2 handle-plus-sink) ─────────────────────────────────────────
+
+#[test]
+fn cert_is_none_by_default() {
+    // Never-silent absence (G2): a fresh Meta has no cert handle until one is explicitly recorded.
+    assert!(Meta::exact(Provenance::Root).cert().is_none());
+    let m = Meta::new(
+        Provenance::Root,
+        GuaranteeStrength::Exact,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(m.cert().is_none());
+}
+
+#[test]
+fn with_cert_sets_the_handle_without_changing_guarantee() {
+    // The handle is a pointer, not a guarantee upgrade (VR-5) — attaching one never changes the
+    // value's strength or its `cert_mode`.
+    let h = crate::ContentHash::parse("blake3:some_cert_handle").unwrap();
+    let m = Meta::exact(Provenance::Root)
+        .with_cert_mode(crate::CertMode::Certified)
+        .with_cert(h.clone());
+    assert_eq!(m.cert(), Some(&h));
+    assert_eq!(m.guarantee(), GuaranteeStrength::Exact);
+    assert_eq!(m.cert_mode(), crate::CertMode::Certified);
+}
+
+#[test]
+fn cert_round_trips_on_the_wire_beside_policy_used() {
+    // Unlike `cert_mode` (deliberately NOT wire-carried), `cert` rides the wire the same way
+    // `policy_used` does (DN-142 §4.2) — a round trip must recover the same handle.
+    let h = crate::ContentHash::parse("blake3:round_trip_cert").unwrap();
+    let m = Meta::exact(Provenance::Root).with_cert(h.clone());
+    let json = serde_json::to_string(&m).expect("serialize");
+    assert!(
+        json.contains("round_trip_cert"),
+        "cert must actually be present on the wire: {json}"
+    );
+    let back: Meta = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(back.cert(), Some(&h));
+}
+
+#[test]
+fn cert_absent_omits_the_wire_field() {
+    // `skip_serializing_if = "Option::is_none"` (mirroring `policy_used`) — an absent cert never
+    // appears on the wire at all, so old readers of a Fast-mode value see nothing new.
+    let m = Meta::exact(Provenance::Root);
+    let json = serde_json::to_string(&m).expect("serialize");
+    assert!(
+        !json.contains("\"cert\""),
+        "an absent cert must not appear on the wire: {json}"
+    );
+}

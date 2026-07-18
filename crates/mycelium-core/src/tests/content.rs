@@ -111,6 +111,36 @@ fn cert_mode_is_excluded_from_the_content_hash() {
 }
 
 #[test]
+fn cert_handle_is_excluded_from_the_content_hash() {
+    // DN-142 §4.2 (P1-Q2): the swap-certificate handle rides `Meta` (dynamic metadata, beside
+    // `policy_used`), so recording one must never perturb a value's content identity — exactly
+    // like `cert_mode` above (ADR-003 / RFC-0001 §4.6).
+    let h = ContentHash::parse("blake3:some_cert_handle").expect("hash");
+    let without = Value::new(
+        Repr::Binary { width: 8 },
+        Payload::Bits(B.to_vec()),
+        Meta::exact(Provenance::Root),
+    )
+    .expect("well-formed");
+    let with_handle = Value::new(
+        Repr::Binary { width: 8 },
+        Payload::Bits(B.to_vec()),
+        Meta::exact(Provenance::Root).with_cert(h),
+    )
+    .expect("well-formed");
+    assert_eq!(
+        without.content_hash(),
+        with_handle.content_hash(),
+        "a cert handle must not change a value's content identity (ADR-003)"
+    );
+    assert_eq!(
+        Node::Const(without).content_hash(),
+        Node::Const(with_handle).content_hash(),
+        "a cert handle must not change a definition's content identity (RFC-0001 §4.6)"
+    );
+}
+
+#[test]
 fn paradigm_change_changes_identity() {
     // A definition differing only in representation paradigm gets a different hash (§4.6).
     let bin = Node::Const(byte(B));

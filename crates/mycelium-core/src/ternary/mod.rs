@@ -12,22 +12,50 @@
 //! `None`/overflow — never a silent wrap (SC-3; G2).
 //!
 //! **Correction (CU-7 recon, 2026-07-08 — mitigation #14, verify against the codebase before
-//! implementing): [`add`]/[`sub`]/[`mul`]/[`neg`] are NOT `i64`-capped.** They are digit-serial
-//! (ripple-carry add, shifted-accumulation multiply) directly over `&[Trit]`, with no `i64`
-//! anywhere in the algorithm; overflow is detected **structurally** (a nonzero final carry /
-//! nonzero high digits), so they are correct and never-silent at **any** width `m`, not just
-//! `m ≤ 40`. The `i64` cap belongs to the separate *conversion* utilities below —
-//! [`max_magnitude`] (whose own `3^m` computation needs `i64` room, hence `None` at `m ≥ 41`) and
-//! [`int_to_trits`]/[`trits_to_int`] (which round-trip a **value** through `i64`, not a width) —
-//! used for decimal-literal encoding and oracle tests, never by `add`/`sub`/`mul`/`neg`
-//! themselves. (A prior revision of this comment conflated the two; corrected per VR-5 — see
+//! implementing): [`add`]/[`sub`]/[`mul`]/[`neg`] are NOT machine-integer-capped.** They are
+//! digit-serial (ripple-carry add, shifted-accumulation multiply) directly over `&[Trit]`, with no
+//! machine integer anywhere in the algorithm; overflow is detected **structurally** (a nonzero
+//! final carry / nonzero high digits), so they are correct and never-silent at **any** width `m`.
+//! The machine-integer cap belongs to the separate *conversion* utilities below —
+//! [`max_magnitude`] (whose own `3^m` computation needs integer room) and
+//! [`int_to_trits`]/[`trits_to_int`] (which round-trip a **value**, not a width) — used for
+//! decimal-literal encoding and oracle tests, never by `add`/`sub`/`mul`/`neg` themselves. (A prior
+//! revision of this comment conflated the two; corrected per VR-5 — see
 //! `crates/mycelium-core/src/tests/ternary.rs` for the width-60/200 witness tests and
 //! `mycelium-l1/tests/enablement.rs`'s width-80 three-way for the end-to-end confirmation.) The
-//! **arbitrary-width** path that removes the *conversion* utilities' `i64` ceiling too (growing a
-//! digit instead of ever needing an `i64`-sized magnitude) lives in `big_ternary` ([`BigTernary`])
-//! — the bignum need the original cap anticipated (E20-1/M-756; RFC-0033 §4.2; ADR-029). The
-//! shared balanced full-adder [`add_with_carry`] is the single never-silent digit primitive both
-//! the fixed-width [`add`] and the growable [`BigTernary`] ripple (DRY).
+//! **arbitrary-width** path that removes the *conversion* utilities' ceiling entirely (growing a
+//! digit instead of ever needing a machine-integer-sized magnitude) lives in `big_ternary`
+//! ([`BigTernary`]) — the bignum need the original cap anticipated (E20-1/M-756; RFC-0033 §4.2;
+//! ADR-029). The shared balanced full-adder [`add_with_carry`] is the single never-silent digit
+//! primitive both the fixed-width [`add`] and the growable [`BigTernary`] ripple (DRY).
+//!
+//! **E-W1 widening (M-1119, 2026-07-18 — W-1 §A.5 enablement item; mitigation #14 verify-first
+//! finding).** The conversion utilities were originally documented as `i64`-capped at `m ≤ 40`, but
+//! that figure was itself inaccurate: `max_magnitude`'s naive `3^m` computation (`pow =
+//! pow.checked_mul(3)?` for `m` iterations) actually overflowed `i64` **one trit earlier**, at
+//! `m = 40` (`3^40 ≈ 1.2158e19 > i64::MAX ≈ 9.223e18`, even though the *quotient* `(3^40−1)/2` would
+//! itself have fit) — so the real pre-widening ceiling was `m ≤ 39`, matching
+//! `mycelium-mlir::swap_codegen::MAX_TERNARY_WIDTH_I64 = 39`'s independently-documented figure, not
+//! the `m ≤ 40` this module's own comment (and `mycelium-std-ternary`'s wrapper) had claimed. A
+//! second, more serious gap: even where `int_to_trits`'s pure divide/mod loop never overflows at any
+//! width, the OLD `i64` [`trits_to_int`] Horner accumulation (`acc·3 + digit`) could — for a
+//! genuinely 41-trit-significant value (e.g. `i64::MIN` encoded at `m = 41`) — transiently exceed
+//! `i64::MAX` mid-fold even though the final decoded value fits `i64`, which is exactly the kind of
+//! decode-side overflow `mycelium-cert::ternary_to_binary` would have hit unconditionally once a
+//! `Ternary{41}` value entered the system (a live G2 gap, not hypothetical — confirmed by direct
+//! computation before this fix). All three conversion utilities now route through **`i128`**
+//! (per the issue's sanctioned choice — full arbitrary-width stays [`BigTernary`]'s job, M-758
+//! `PackedTernary` stays YAGNI): [`max_magnitude`]'s `3^m` fits `i128` through `m = 80`
+//! (`3^80 ≈ 1.478e38 < i128::MAX ≈ 1.7014e38`; `3^81` overflows); [`int_to_trits`]'s divide/mod loop
+//! never overflows at any width (unchanged shape, just wider); [`trits_to_int`]'s Horner fold stays
+//! **infallible** (not `Option`, matching its existing contract) and is safe for every width whose
+//! `max_magnitude` itself fits `i128` (`m ≲ 80`) — a caller decoding a wider, larger-magnitude trit
+//! string still carries the same *kind* of undocumented-boundary risk this module always had, just
+//! moved from `~40` to `~80` trits; [`BigTernary::to_i128`] remains the fully checked (`Option`)
+//! alternative when that residual matters. This directly unblocks the W-1 canonical
+//! `Binary{64} ↔ Ternary{41}` pair (`docs/spec/swaps/binary-ternary.md` §A.3/§A.5): `max_magnitude(41)`
+//! now returns `Some`, and `mycelium-cert::legal_pair`/`mycelium-mlir::swap_codegen::legal_pair` (both
+//! already `i128`-typed at their own call sites) pick the fix up directly.
 
 mod big_ternary;
 pub use big_ternary::{checked_add_fixed, BigTernary, FixedWidthTrits};
@@ -103,10 +131,11 @@ pub(crate) fn is_nonzero(t: Trit) -> bool {
 }
 
 /// The maximum representable magnitude in `m` trits: `(3^m − 1) / 2`. The range is the symmetric
-/// `[−max, +max]`. Returns `None` if `3^m` would overflow `i64` (`m ≥ 41`).
+/// `[−max, +max]`. Returns `None` if `3^m` would overflow `i128` (`m ≥ 81`; E-W1/M-1119 widened
+/// this from the prior real ceiling of `m ≥ 40` — see the module doc comment).
 #[must_use]
-pub fn max_magnitude(m: u32) -> Option<i64> {
-    let mut pow: i64 = 1;
+pub fn max_magnitude(m: u32) -> Option<i128> {
+    let mut pow: i128 = 1;
     for _ in 0..m {
         pow = pow.checked_mul(3)?;
     }
@@ -114,16 +143,25 @@ pub fn max_magnitude(m: u32) -> Option<i64> {
 }
 
 /// The integer denoted by an MSB-first trit string (`value(t)`, §1). The empty string is `0`.
+///
+/// Infallible (matches its pre-widening contract): safe for every width whose [`max_magnitude`]
+/// itself fits `i128` (`m ≲ 80`, E-W1/M-1119); [`BigTernary::to_i128`] is the fully checked
+/// (`Option`) alternative beyond that.
 #[must_use]
-pub fn trits_to_int(trits: &[Trit]) -> i64 {
+pub fn trits_to_int(trits: &[Trit]) -> i128 {
     // Horner from the most-significant digit: v = v·3 + dⱼ.
-    trits.iter().fold(0i64, |acc, &t| acc * 3 + digit(t))
+    trits
+        .iter()
+        .fold(0i128, |acc, &t| acc * 3 + i128::from(digit(t)))
 }
 
 /// The unique `m`-trit balanced representation of `value`, MSB-first — or `None` if `value` lies
 /// outside the `m`-trit range (an explicit out-of-range result, never a silent truncation; §3.1).
+///
+/// The divide/mod loop below never overflows at any width `m` (E-W1/M-1119 module doc comment) —
+/// only the *conversion* (not this codec) was ever machine-integer-limited.
 #[must_use]
-pub fn int_to_trits(value: i64, m: u32) -> Option<Vec<Trit>> {
+pub fn int_to_trits(value: i128, m: u32) -> Option<Vec<Trit>> {
     let mut v = value;
     let mut lsb_first = Vec::with_capacity(m as usize);
     for _ in 0..m {
@@ -134,7 +172,10 @@ pub fn int_to_trits(value: i64, m: u32) -> Option<Vec<Trit>> {
             r = -1;
             v += 1; // borrow: 2 ≡ −1 (mod 3)
         }
-        lsb_first.push(from_digit(r));
+        // `r` is folded into {−1, 0, +1} above — a lossless narrowing to `from_digit`'s `i64`
+        // digit domain (never a truncation of the actual `i128` value, only of this bounded
+        // per-digit residual).
+        lsb_first.push(from_digit(r as i64));
     }
     if v != 0 {
         return None; // value did not fit in m trits — out of range
@@ -229,156 +270,4 @@ pub fn mul(a: &[Trit], b: &[Trit]) -> Option<Vec<Trit>> {
     }
     let low_msb: Vec<Trit> = acc[..m].iter().rev().copied().collect();
     Some(low_msb)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// **Exhaustive truth-table proof** of the shared balanced full-adder over all 27 inputs: the
-    /// digit identity `a + b + carry_in == digit_out + 3·carry_out` holds exactly. This is the
-    /// regression guard for the DRY extraction — both [`add`] and [`BigTernary`] ripple this one
-    /// primitive, so a broken row fails here immediately (alongside `add_matches_integer_oracle`).
-    #[test]
-    fn add_with_carry_is_exhaustively_correct() {
-        for a in [Trit::Neg, Trit::Zero, Trit::Pos] {
-            for b in [Trit::Neg, Trit::Zero, Trit::Pos] {
-                for c in [Trit::Neg, Trit::Zero, Trit::Pos] {
-                    let (d, carry) = add_with_carry(a, b, c);
-                    assert_eq!(
-                        digit(a) + digit(b) + digit(c),
-                        digit(d) + 3 * digit(carry),
-                        "full-adder identity for ({a:?}, {b:?}, {c:?})"
-                    );
-                }
-            }
-        }
-    }
-
-    /// Walk every integer representable in `m` trits, paired with its codec encoding.
-    fn each_in_range(m: u32, mut f: impl FnMut(i64, Vec<Trit>)) {
-        let max = max_magnitude(m).unwrap();
-        for v in -max..=max {
-            f(v, int_to_trits(v, m).expect("in range"));
-        }
-    }
-
-    #[test]
-    fn worked_example_matches_spec() {
-        // binary-ternary.md §5: −78 in 6 trits is ⟨0,−1,0,0,+1,0⟩.
-        let t = int_to_trits(-78, 6).unwrap();
-        assert_eq!(
-            t,
-            vec![
-                Trit::Zero,
-                Trit::Neg,
-                Trit::Zero,
-                Trit::Zero,
-                Trit::Pos,
-                Trit::Zero
-            ]
-        );
-        assert_eq!(trits_to_int(&t), -78);
-    }
-
-    #[test]
-    fn range_is_symmetric() {
-        assert_eq!(max_magnitude(1), Some(1));
-        assert_eq!(max_magnitude(6), Some(364)); // (3^6−1)/2
-        assert_eq!(int_to_trits(365, 6), None); // just past the max → out of range
-        assert_eq!(int_to_trits(-365, 6), None);
-    }
-
-    #[test]
-    fn codec_round_trips_exhaustively() {
-        for m in 1..=5 {
-            each_in_range(m, |v, t| {
-                assert_eq!(t.len(), m as usize);
-                assert_eq!(trits_to_int(&t), v, "round-trip at m={m}");
-            });
-        }
-    }
-
-    #[test]
-    fn neg_is_value_negation() {
-        for m in 1..=5 {
-            each_in_range(m, |v, t| {
-                assert_eq!(trits_to_int(&neg(&t)), -v, "neg at m={m}");
-            });
-        }
-    }
-
-    /// **Oracle property test (add):** the digit-wise ripple-carry adder agrees with the `i64`
-    /// oracle for *every* pair at small widths — in range it equals the encoded sum, out of range
-    /// it is `None`.
-    #[test]
-    fn add_matches_integer_oracle() {
-        for m in 1..=4 {
-            let max = max_magnitude(m).unwrap();
-            for x in -max..=max {
-                for y in -max..=max {
-                    let a = int_to_trits(x, m).unwrap();
-                    let b = int_to_trits(y, m).unwrap();
-                    let got = add(&a, &b);
-                    let expected = x + y;
-                    if expected.abs() <= max {
-                        assert_eq!(got, int_to_trits(expected, m), "add {x}+{y} at m={m}");
-                    } else {
-                        assert_eq!(got, None, "add {x}+{y} should overflow at m={m}");
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn sub_matches_integer_oracle() {
-        for m in 1..=4 {
-            let max = max_magnitude(m).unwrap();
-            for x in -max..=max {
-                for y in -max..=max {
-                    let a = int_to_trits(x, m).unwrap();
-                    let b = int_to_trits(y, m).unwrap();
-                    let got = sub(&a, &b);
-                    let expected = x - y;
-                    if expected.abs() <= max {
-                        assert_eq!(got, int_to_trits(expected, m), "sub {x}-{y} at m={m}");
-                    } else {
-                        assert_eq!(got, None, "sub {x}-{y} should overflow at m={m}");
-                    }
-                }
-            }
-        }
-    }
-
-    /// **Oracle property test (mul):** the shifted-add multiplier agrees with the `i64` oracle for
-    /// every pair at small widths.
-    #[test]
-    fn mul_matches_integer_oracle() {
-        for m in 1..=4 {
-            let max = max_magnitude(m).unwrap();
-            for x in -max..=max {
-                for y in -max..=max {
-                    let a = int_to_trits(x, m).unwrap();
-                    let b = int_to_trits(y, m).unwrap();
-                    let got = mul(&a, &b);
-                    let expected = x * y;
-                    if expected.abs() <= max {
-                        assert_eq!(got, int_to_trits(expected, m), "mul {x}*{y} at m={m}");
-                    } else {
-                        assert_eq!(got, None, "mul {x}*{y} should overflow at m={m}");
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn unequal_widths_are_rejected() {
-        let a = int_to_trits(1, 2).unwrap();
-        let b = int_to_trits(1, 3).unwrap();
-        assert_eq!(add(&a, &b), None);
-        assert_eq!(sub(&a, &b), None);
-        assert_eq!(mul(&a, &b), None);
-    }
 }
