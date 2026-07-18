@@ -1,0 +1,5 @@
+{
+  "provenance": { "kind": "Root" },
+  "guarantee": "Exact",
+  "bound": { "kind": "ErrorBound", "eps": 0.01, "norm": "L2", "basis": { "kind": "UserDeclared" } }
+}

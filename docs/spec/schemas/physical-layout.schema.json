@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PhysicalLayout",
+  "description": "The RECORD of the schedule-staged packing chosen at a lowering stage (RFC-0001 §4.1/§4.3; DN-01 Resolved; RFC-0004 §5). Physical layout is NOT in the type and is NOT the decision locus — it is an inspectable record (FR-M5, NFR-4). Invariant M-I5: `physical` is always a lossless encoding of `payload`; changing it MUST NOT change the value's type or its guarantee.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §4.1, §4.3; RFC-0004 §5; DN-01",
+    "ratified_against": "RFC-0001 (Accepted, r1) §4.3 + DN-01 (Resolved)",
+    "ratified_on": "2026-06-09",
+    "$comment": "M-I5 (losslessness) relates `physical` to `payload`; it is a cross-value-field invariant verified by code (Phase-1 M-101/M-112), not within this schema."
+  },
+  "$defs": {
+    "PackScheme": {
+      "type": "string",
+      "enum": ["Unpacked", "TwoBitPerTrit", "FiveTritPerByte", "I2S", "TL1", "TL2"],
+      "description": "RFC-0001 §4.3: an EXTENSIBLE registry. The fixed small set (~5 schemes) keeps schedule selection tractable (T1.4). I2S/TL1/TL2 are the bitnet.cpp packings (DN-01)."
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "layout": { "const": "BinaryWords" } },
+      "required": ["layout"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layout": { "const": "TritPacked" },
+        "scheme": { "$ref": "#/$defs/PackScheme" }
+      },
+      "required": ["layout", "scheme"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "layout": { "const": "DenseArray" } },
+      "required": ["layout"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layout": { "const": "VsaStore" },
+        "sparse": { "type": "boolean" }
+      },
+      "required": ["layout", "sparse"]
+    }
+  ]
+}

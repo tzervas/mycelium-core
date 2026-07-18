@@ -1,0 +1,6 @@
+{
+  "provenance": { "kind": "Derived", "op": "blake3:bundle_Op01", "inputs": ["blake3:hv_a01", "blake3:hv_b02"] },
+  "guarantee": "Proven",
+  "bound": { "kind": "CapacityBound", "items": 3, "dim": 10000, "basis": { "kind": "ProvenThm", "citation": "Clarkson-Ubaru-Yang 2023" } },
+  "sparsity": { "active": 97, "density": 0.0097 }
+}

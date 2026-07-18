@@ -1,0 +1,9 @@
+{
+  "mode": "CompositionalReconstruction",
+  "model": "MAP-I",
+  "dim": 10000,
+  "codebooks": ["blake3:roles01", "blake3:fillers02"],
+  "recipe": { "roles": ["subject", "verb", "object"], "structure": { "subject": "blake3:roleAtom_subject", "verb": "blake3:roleAtom_verb", "object": "blake3:roleAtom_object" } },
+  "decode": { "procedure": "Resonator", "factors": ["blake3:roles01", "blake3:fillers02"], "iteration_budget": 50 },
+  "bound": { "kind": "ProbabilityBound", "delta": 0.05, "basis": { "kind": "EmpiricalFit", "trials": 10000, "method": "resonator convergence trials" } }
+}

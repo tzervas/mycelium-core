@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GuaranteeStrength",
+  "description": "Honesty as a typed, monotone property (RFC-0001 §3.4, §4.7). The lattice Exact > Proven > Empirical > Declared, ordered strongest-to-weakest. An operation's result takes the MEET (weakest) of its inputs' strengths and the operation's own intrinsic strength, so disclosed strength can only degrade, never spuriously upgrade (Tension B; VR-3/VR-5). 'Declared' is kept distinct from 'Empirical' so unverified user assertions can never masquerade as measured ones; tooling MUST always flag a Declared value (M-I4).",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §3.4, §4.7",
+    "ratified_against": "RFC-0001 (Accepted, r1) §3.4 / §4.7 guarantee lattice",
+    "ratified_on": "2026-06-09",
+    "lattice_order": ["Exact", "Proven", "Empirical", "Declared"],
+    "$comment": "The MEET composition rule (VR-3/VR-5) is a behavioural contract over operations, not a single-instance property; it is verified by code (Phase-1 M-102, all 4x4 pairs property-tested), not by this schema. This schema fixes only the value space."
+  },
+  "type": "string",
+  "enum": ["Exact", "Proven", "Empirical", "Declared"]
+}

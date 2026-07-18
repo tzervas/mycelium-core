@@ -1,0 +1,8 @@
+{
+  "mode": "CompositionalReconstruction",
+  "model": "MAP-I",
+  "dim": 10000,
+  "codebooks": ["blake3:roles01"],
+  "decode": { "procedure": "Resonator", "iteration_budget": 50 },
+  "bound": { "kind": "ProbabilityBound", "delta": 0.05, "basis": { "kind": "EmpiricalFit", "trials": 10000, "method": "resonator convergence trials" } }
+}

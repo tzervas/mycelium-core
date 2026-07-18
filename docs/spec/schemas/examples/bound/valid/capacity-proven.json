@@ -1,0 +1,1 @@
+{ "kind": "CapacityBound", "items": 3, "dim": 10000, "basis": { "kind": "ProvenThm", "citation": "Clarkson-Ubaru-Yang 2023" } }

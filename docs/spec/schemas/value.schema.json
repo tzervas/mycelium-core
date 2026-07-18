@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Value",
+  "description": "A Mycelium value: a representation descriptor + a payload + metadata (RFC-0001 §4.2). The self-describing wire form is [Repr] || [Meta] || [payload], faithfully round-trippable: deserialize(serialize(v)) == v including Meta (RFC-0001 §4.8). This is the top-level data contract that Core IR (de)serialization (Phase-1 M-104) targets.",
+  "x-mycelium": {
+    "status": "ratified",
+    "task": "M-010",
+    "source": "RFC-0001 §4.2, §4.8",
+    "ratified_against": "RFC-0001 (Accepted, r1) §4.2 value model + §4.8 serialization",
+    "ratified_on": "2026-06-09",
+    "$comment": "`payload` encodings are representation-specific (binary words; trit sequences; scalar arrays; hypervector sparse/dense storage) and are defined per paradigm in Phase 1. The schema fixes only that a payload is present; well-formedness of payload-vs-repr is a code check (M-101)."
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["repr", "payload", "meta"],
+  "properties": {
+    "repr": { "$ref": "repr.schema.json" },
+    "payload": {
+      "description": "Representation-specific payload; type-checked against `repr` by the kernel (M-101), not by this schema.",
+      "$comment": "Intentionally unconstrained here (any JSON) — paradigm-specific payload schemas are layered in Phase 1."
+    },
+    "meta": { "$ref": "meta.schema.json" }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "mode": "IndexedRetrieval",
+  "model": "MAP-I",
+  "dim": 10000,
+  "codebooks": ["blake3:codebook_items01"],
+  "decode": { "procedure": "Cleanup", "cleanup_threshold": 0.3 }
+}

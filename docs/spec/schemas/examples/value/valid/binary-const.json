@@ -1,0 +1,5 @@
+{
+  "repr": { "kind": "Binary", "width": 8 },
+  "payload": { "bits": "10110010" },
+  "meta": { "provenance": { "kind": "Root" }, "guarantee": "Exact" }
+}
