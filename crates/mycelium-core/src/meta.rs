@@ -107,6 +107,23 @@ pub struct Meta {
     /// never an ambient default and does **not** silence Axis-A guarantee/cert_mode tags (VR-5).
     /// Excluded from the content hash (rides `Meta`; RFC-0001 §4.6).
     wrapping_opt: Option<WrappingOpt>,
+    /// A content-hash **handle** to the swap certificate this value's producing swap emitted, if any
+    /// (DN-142 §4.2; P1-Q2 handle-plus-sink architecture — closes the `ModeGatedSwapEngine`
+    /// cert-discard gap without widening the `SwapEngine` trait). This is a *pointer*, not the
+    /// certificate body: the body lives in a mode-gated, capped, content-addressed store
+    /// (`mycelium-cert`'s `CertStore`), addressable by this same hash. **Absent by default** — set
+    /// beside `policy_used` on the identical excluded-from-content-hash basis (RFC-0001 §4.6): a
+    /// value's identity never depends on whether or how it was certified. `Fast` never sets it (the
+    /// `LanguageRetentionPolicy` §5 `fast` cap is `0` — nothing is retained to point at);
+    /// `Balanced`/`Certified` set it to the emitted certificate's own content hash (self-computing —
+    /// the handle does not depend on whether any particular store instance actually retained the
+    /// body; retention/eviction is the store's own, separate concern). **Boxed** (unlike sibling
+    /// `Option<ContentHash>` fields such as `policy_used`): an unboxed addition here measurably grew
+    /// `Meta` — and therefore `Value` — enough to trip `clippy::large_enum_variant` on the `Alt`/
+    /// `AnfAlt` match-arm enums that embed a `Value` (`node.rs`/`lower.rs`); boxing this
+    /// *newly-added, usually-`None`* field keeps the marginal size cost to one pointer, mirroring
+    /// the existing `reconstruction: Option<Box<ReconInfo>>` precedent immediately above.
+    cert: Option<Box<ContentHash>>,
 }
 
 impl Meta {
@@ -148,6 +165,7 @@ impl Meta {
             policy_used,
             cert_mode: CertMode::default(),
             wrapping_opt: None,
+            cert: None,
         })
     }
 
@@ -205,6 +223,16 @@ impl Meta {
         self
     }
 
+    /// Record the content-hash **handle** of the swap certificate this value's producing swap
+    /// emitted (DN-142 §4.2; P1-Q2). Touches only `cert` — leaves guarantee/bound/cert_mode/
+    /// wrapping_opt/value untouched, so it can never change a value's strength or identity
+    /// (excluded from the content hash; RFC-0001 §4.6 / ADR-003, beside `policy_used`).
+    #[must_use]
+    pub fn with_cert(mut self, cert: ContentHash) -> Self {
+        self.cert = Some(Box::new(cert));
+        self
+    }
+
     /// The common `Exact` metadata with no bound (M-I1).
     #[must_use]
     pub fn exact(provenance: Provenance) -> Self {
@@ -218,6 +246,7 @@ impl Meta {
             policy_used: None,
             cert_mode: CertMode::default(),
             wrapping_opt: None,
+            cert: None,
         }
     }
 
@@ -275,6 +304,14 @@ impl Meta {
     pub fn wrapping_opt(&self) -> Option<WrappingOpt> {
         self.wrapping_opt
     }
+
+    /// The content-hash handle of the swap certificate this value's producing swap emitted, if any
+    /// (DN-142 §4.2). `None` in `Fast` mode (the `LanguageRetentionPolicy` §5 cap is `0` — nothing
+    /// retained to point at) and for any value not produced by a mode-gated swap.
+    #[must_use]
+    pub fn cert(&self) -> Option<&ContentHash> {
+        self.cert.as_deref()
+    }
 }
 
 /// The wire projection of [`Meta`] (`meta.schema.json`). Optional fields are omitted when absent
@@ -305,6 +342,16 @@ struct MetaWire {
     reconstruction: Option<Box<ReconInfo>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     policy_used: Option<ContentHash>,
+    /// `cert` rides the wire beside `policy_used` (DN-142 §4.2) — unlike `cert_mode` (deliberately
+    /// NOT wire-carried, see the `MetaWire` doc below), a cert handle is a "which artifact produced
+    /// this" pointer in the same family as `policy_used`, not a runtime-only mode tag, so it is
+    /// carried the same way. **Judgment call, flagged**: the handle may point at a store entry that
+    /// does not exist in whatever process later deserializes this record (the store is process-local
+    /// in this wave) — a stale/unresolvable handle is honest (a pointer, not a claim the body is
+    /// still retrievable) and callers must treat `CertStore::get` returning `None` as ordinary, not
+    /// as corruption.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cert: Option<ContentHash>,
 }
 
 impl Serialize for Meta {
@@ -317,6 +364,7 @@ impl Serialize for Meta {
             physical: self.physical,
             reconstruction: self.reconstruction.clone(),
             policy_used: self.policy_used.clone(),
+            cert: self.cert.as_deref().cloned(),
         }
         .serialize(serializer)
     }
@@ -336,8 +384,12 @@ impl<'de> Deserialize<'de> for Meta {
             w.policy_used,
         )
         .map_err(serde::de::Error::custom)?;
-        Ok(match w.reconstruction {
+        let meta = match w.reconstruction {
             Some(r) => meta.with_reconstruction(*r),
+            None => meta,
+        };
+        Ok(match w.cert {
+            Some(c) => meta.with_cert(c),
             None => meta,
         })
     }
