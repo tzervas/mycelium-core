@@ -13,14 +13,13 @@ fn trusted_base_forbids_unsafe() {
     let crates_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("crates/mycelium-core has a parent (crates/)");
-    for krate in ["mycelium-core"] {
-        let lib = crates_dir.join(krate).join("src/lib.rs");
-        let src =
-            std::fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {}: {e}", lib.display()));
-        assert!(
-            src.contains("#![forbid(unsafe_code)]"),
-            "{krate}/src/lib.rs must carry `#![forbid(unsafe_code)]` — the checked basis for the \
-             RFC-0034 §3.3 memory-safety clause (Proven). Its removal would un-ground the claim."
-        );
-    }
+    let krate = "mycelium-core";
+    let lib = crates_dir.join(krate).join("src/lib.rs");
+    let src =
+        std::fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {}: {e}", lib.display()));
+    assert!(
+        src.contains("#![forbid(unsafe_code)]"),
+        "{krate}/src/lib.rs must carry `#![forbid(unsafe_code)]` — the checked basis for the \
+         RFC-0034 §3.3 memory-safety clause (Proven). Its removal would un-ground the claim."
+    );
 }
